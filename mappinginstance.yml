@@ -1,0 +1,97 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: -|
+   This template will use Instructor Claudio's Template named SampleNetwokCrossStack 
+   and display another using cross stack reference.
+
+Metadata: 
+ Authors:
+    Description: Joseph Mbatchou  # The writer of this template
+
+Parameters: 
+ InstanceType:
+    Description: WebServer EC2 instance type (has default, AllowedValues)
+    Type: String
+    AllowedValues: # choose between all t2 category 
+      - t2.large
+      - t2.nano
+      - t2.micro
+      - t2.small
+      - t2.xlarge
+      - t2.2xlarge
+      - t2.medium
+
+ KeyName:
+    Description: Name of existing EC2 KeyPair to enable SSH access to new instances
+    Type: AWS::EC2::KeyPair::KeyName #pulls all keys u have in Region/identifier
+    ConstraintDescription: must be the name of an existing EC2 keypair  
+
+ CrossStackName: 
+    Description: This the name of the network stack imported # any stack name can be imported here. 
+    Type: String 
+    Default: SampleNetworkCrossStack
+
+
+Mappings: 
+ RegionMap:
+   us-west-2:
+    "HVM64":  "ami-0b2b4f610e654d9ac" #Oregon
+   us-east-2:
+    "HVM64": "ami-0beaa649c482330f7" #Ohio
+   us-east-1:
+    "HVM64": "ami-0b0dcb5067f052a63" #North Virginia 
+   us-west-1:
+    "HVM64": "ami-0f5e8a042c8bfcd5e"  # North California 
+
+Resources:
+  MyEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      KeyName: !Ref KeyName  # Key name created in the region.
+      ImageId: !FindInMap [RegionMap, !Ref AWS::Region, "HVM64"]
+      InstanceType: !Ref InstanceType # import the type from the parameter 
+      SecurityGroupIds:  # import Security group from the CLaudio template
+        - !ImportValue
+            SampleNetworkCrossStack-SecurityGroupID   #This can be choose or the second one
+        #  - Fn::ImportValue:
+        #     !Sub "${SampleNetworkCrossStack}-SecurityGroupID"
+      SubnetId: # Import the Subnet ID from the SampleNetworkCroosStack template 
+          !ImportValue 'SampleNetworkCrossStack-SubnetID'
+          # Fn::ImportValue:
+          #  !Sub "${SampleNetworkCrossStack}-SubnetID"
+      UserData: 
+         Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd
+          systemctl start httpd
+          systemctl enable httpd
+          echo "<html><body><h1>WELCOME TO CLOUDFORMATION</h1><br>You successfully access Joseph Mbatchou web page launched via CloudFormation in ${AWS::Region}</body></html>" > /var/www/html/index.html
+      Tags:
+       - Key: Name
+         Value: EC2-Cross-stack-reference
+        
+  
+  MyEIP:
+    Type: AWS::EC2::EIP # Allocate an Elastic IP address
+    Properties:
+      InstanceId: !Ref MyEC2Instance  
+
+Outputs:     
+  PrivateIpAddress:
+   Description: Display the Private IPv4 of the EC2 MyEC2Instance
+   Value: !GetAtt MyEC2Instance.PrivateIp
+   Export: 
+    Name: !Sub '${AWS::StackName}-MyEC2Instance'
+  
+  PrivateDnsName:
+   Description: Display the Dns Name of the EC2 MyEC2Instance
+   Value: !GetAtt MyEC2Instance.PrivateDnsName
+   Export: 
+    Name: !Sub '${AWS::StackName}-MyEC2Instance1'
+
+  PublicDnsName:
+   Description: Display the Dns Name of the EC2 MyEC2Instance
+   Value: !GetAtt MyEC2Instance.PublicDnsName
+   Export: 
+    Name: !Sub '${AWS::StackName}-MyEC2Instance2'  
+
